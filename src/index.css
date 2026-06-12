@@ -37,6 +37,11 @@
   box-sizing: border-box;
 }
 
+/* Prevent authored display values from defeating the hidden attribute */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
 }

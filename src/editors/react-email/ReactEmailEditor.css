@@ -1,11 +1,95 @@
+/* ── Shell ─────────────────────────────────────────────────────────────── */
+
 .re-editor-shell {
   display: flex;
   flex-direction: column;
   height: 100%;
 }
 
-.re-editor-content {
+/* ── Outer border wrapper ──────────────────────────────────────────────── */
+/*
+ * re-editor-wrap provides the combined border + border-radius treatment that
+ * matches the TipTap panel (.toolbar + .tt-editor-content).
+ *
+ * Layout trick: EmailEditor's EditorProvider renders EditorContent first,
+ * then children (our toolbar) in the DOM. We set the wrapper to flex-column
+ * and give the .re-toolbar child `order: -1` so it appears visually above
+ * the editing surface without any DOM reordering.
+ */
+
+.re-editor-wrap {
+  display: contents; /* let EmailEditor's own container be the flex context */
+}
+
+/* ── EmailEditor container (receives className="re-editor-frame") ─────── */
+/*
+ * EmailEditor passes className to editorContainerProps, which lands on the
+ * div wrapping EditorContent. That same div also receives our toolbar child.
+ * We turn it into a flex column so order: -1 on .re-toolbar works.
+ */
+
+.re-editor-frame {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 220px;
+  background: var(--bg);
+}
+
+/* ── Toolbar (visually first via order: -1) ───────────────────────────── */
+
+.re-toolbar {
+  order: -1;
+  /* Override the shared .toolbar border-radius so it matches the frame */
+  border-radius: 8px 8px 0 0;
+  border: none;               /* border comes from re-editor-frame */
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* ── EmailEditor's inner editing surface ─────────────────────────────── */
+/*
+ * The ProseMirror div that EditorProvider renders. We target it through the
+ * .re-editor-frame scope so we don't bleed into other editors on the page.
+ */
+
+.re-editor-frame .tiptap {
   flex: 1;
-  overflow-y: auto;
-  /* The EmailEditor renders its own toolbar and content area */
+  padding: 1rem;
+  font-size: 1rem;
+  line-height: 1.6;
+  background: var(--bg);
+  outline: none;
+  min-height: 180px;
+}
+
+/* Remove the border-radius applied by the shared re-editor-content rule in
+ * App.css — our frame div already handles the rounded corners. */
+.re-editor-content {
+  border-radius: 0 !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+/* ── Editor actions bar ──────────────────────────────────────────────── */
+
+.re-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.5rem 0;
+}
+
+/* ── Suppress default text-selection bubble menu ─────────────────────── */
+/*
+ * We have a fixed toolbar, so the floating text-selection bubble menu
+ * (data-re-bubble-menu) is redundant and conflicts with our UX.
+ * Button and image bubble menus (data-re-btn-bm-*, data-re-img-bm-*)
+ * are also suppressed since those node types are outside our required set.
+ */
+[data-re-bubble-menu] {
+  display: none !important;
 }
