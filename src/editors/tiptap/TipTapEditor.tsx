@@ -112,28 +112,28 @@ export function TipTapEditor() {
           <div className="toolbar-group" role="group" aria-label="Text style">
             <ToolbarButton
               onClick={() => editor.chain().focus().toggleBold().run()}
-              isActive={editor.isActive('bold')}
+              isActive={toolbarState.bold}
               aria-label="Bold"
             >
               <strong>B</strong>
             </ToolbarButton>
             <ToolbarButton
               onClick={() => editor.chain().focus().toggleItalic().run()}
-              isActive={editor.isActive('italic')}
+              isActive={toolbarState.italic}
               aria-label="Italic"
             >
               <em>I</em>
             </ToolbarButton>
             <ToolbarButton
               onClick={() => editor.chain().focus().toggleUnderline().run()}
-              isActive={editor.isActive('underline')}
+              isActive={toolbarState.underline}
               aria-label="Underline"
             >
               <u>U</u>
             </ToolbarButton>
             <ToolbarButton
               onClick={() => editor.chain().focus().toggleStrike().run()}
-              isActive={editor.isActive('strike')}
+              isActive={toolbarState.strike}
               aria-label="Strikethrough"
             >
               <s>S</s>
@@ -147,18 +147,18 @@ export function TipTapEditor() {
               <ToolbarButton
                 key={level}
                 onClick={() => toggleHeading(level)}
-                isActive={editor.isActive('heading', { level })}
+                isActive={headingActive[level]}
                 aria-label={`Heading ${level}`}
-                aria-pressed={editor.isActive('heading', { level })}
+                aria-pressed={headingActive[level]}
               >
                 H{level}
               </ToolbarButton>
             ))}
             <ToolbarButton
               onClick={() => editor.chain().focus().setParagraph().run()}
-              isActive={editor.isActive('paragraph')}
+              isActive={toolbarState.paragraph}
               aria-label="Paragraph"
-              aria-pressed={editor.isActive('paragraph')}
+              aria-pressed={toolbarState.paragraph}
             >
               P
             </ToolbarButton>
@@ -169,17 +169,17 @@ export function TipTapEditor() {
           <div className="toolbar-group" role="group" aria-label="List type">
             <ToolbarButton
               onClick={() => editor.chain().focus().toggleBulletList().run()}
-              isActive={editor.isActive('bulletList')}
+              isActive={toolbarState.bulletList}
               aria-label="Bullet list"
-              aria-pressed={editor.isActive('bulletList')}
+              aria-pressed={toolbarState.bulletList}
             >
               • List
             </ToolbarButton>
             <ToolbarButton
               onClick={() => editor.chain().focus().toggleOrderedList().run()}
-              isActive={editor.isActive('orderedList')}
+              isActive={toolbarState.orderedList}
               aria-label="Numbered list"
-              aria-pressed={editor.isActive('orderedList')}
+              aria-pressed={toolbarState.orderedList}
             >
               1. List
             </ToolbarButton>
@@ -196,7 +196,7 @@ export function TipTapEditor() {
                   ? editor.chain().focus().sinkListItem('listItem').run()
                   : editor.chain().focus().indent().run()
               }
-              disabled={!indentState.canSink && !indentState.canIndent}
+              disabled={!toolbarState.canSink && !toolbarState.canIndent}
               aria-label="Increase indent"
             >
               →
@@ -207,7 +207,7 @@ export function TipTapEditor() {
                   ? editor.chain().focus().liftListItem('listItem').run()
                   : editor.chain().focus().outdent().run()
               }
-              disabled={!indentState.canLift && !indentState.canOutdent}
+              disabled={!toolbarState.canLift && !toolbarState.canOutdent}
               aria-label="Decrease indent"
             >
               ←

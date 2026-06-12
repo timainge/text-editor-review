@@ -93,14 +93,14 @@ function styleWithIndent(style: string, indent: number): string {
 function ReEmailToolbar() {
   const { editor } = useCurrentEditor()
 
-  // Hybrid indent state: inside a list, promote/demote the list item;
-  // otherwise adjust margin-left on the paragraph/heading via the built-in
-  // StyleAttribute extension (see comment above the helpers).
-  //
-  // useEditorState subscribes to editor transactions, so the disabled state
+  // useEditorState subscribes to editor transactions, so all toolbar state
   // stays fresh on selection-only changes — useCurrentEditor alone does not
-  // re-render this toolbar when the cursor moves.
-  const indentState = useEditorState({
+  // re-render this toolbar when the cursor moves. Every isActive/can value
+  // the toolbar renders must flow through this selector: useEditorState only
+  // re-renders when the selector OUTPUT changes, so any isActive read outside
+  // it goes stale (e.g. moving between an H1 and an H2 changed no indent
+  // flag, so the heading buttons never updated).
+  const toolbarState = useEditorState({
     editor,
     selector: ({ editor: e }) => {
       if (!e) return null
@@ -111,6 +111,16 @@ function ReEmailToolbar() {
         : null
       const blockStyle = indentBlock ? ((e.getAttributes(indentBlock).style as string) || '') : ''
       return {
+        bold: e.isActive('bold'),
+        italic: e.isActive('italic'),
+        underline: e.isActive('underline'),
+        strike: e.isActive('strike'),
+        heading1: e.isActive('heading', { level: 1 }),
+        heading2: e.isActive('heading', { level: 2 }),
+        heading3: e.isActive('heading', { level: 3 }),
+        paragraph: e.isActive('paragraph'),
+        bulletList: e.isActive('bulletList'),
+        orderedList: e.isActive('orderedList'),
         canSink: e.can().sinkListItem('listItem'),
         canLift: e.can().liftListItem('listItem'),
         inList,
@@ -120,7 +130,13 @@ function ReEmailToolbar() {
     },
   })
 
-  if (!editor || !indentState) return null
+  if (!editor || !toolbarState) return null
+
+  const headingActive: Record<HeadingLevel, boolean> = {
+    1: toolbarState.heading1,
+    2: toolbarState.heading2,
+    3: toolbarState.heading3,
+  }
 
   const toggleHeading = (level: HeadingLevel) =>
     editor.chain().focus().toggleHeading({ level }).run()
@@ -157,28 +173,28 @@ function ReEmailToolbar() {
       <div className="toolbar-group" role="group" aria-label="Text style">
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
-          isActive={editor.isActive('bold')}
+          isActive={toolbarState.bold}
           aria-label="Bold"
         >
           <strong>B</strong>
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleItalic().run()}
-          isActive={editor.isActive('italic')}
+          isActive={toolbarState.italic}
           aria-label="Italic"
         >
           <em>I</em>
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleUnderline().run()}
-          isActive={editor.isActive('underline')}
+          isActive={toolbarState.underline}
           aria-label="Underline"
         >
           <u>U</u>
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleStrike().run()}
-          isActive={editor.isActive('strike')}
+          isActive={toolbarState.strike}
           aria-label="Strikethrough"
         >
           <s>S</s>
@@ -192,18 +208,18 @@ function ReEmailToolbar() {
           <ToolbarButton
             key={level}
             onClick={() => toggleHeading(level)}
-            isActive={editor.isActive('heading', { level })}
+            isActive={headingActive[level]}
             aria-label={`Heading ${level}`}
-            aria-pressed={editor.isActive('heading', { level })}
+            aria-pressed={headingActive[level]}
           >
             H{level}
           </ToolbarButton>
         ))}
         <ToolbarButton
           onClick={() => editor.chain().focus().setParagraph().run()}
-          isActive={editor.isActive('paragraph')}
+          isActive={toolbarState.paragraph}
           aria-label="Paragraph"
-          aria-pressed={editor.isActive('paragraph')}
+          aria-pressed={toolbarState.paragraph}
         >
           P
         </ToolbarButton>
@@ -214,17 +230,17 @@ function ReEmailToolbar() {
       <div className="toolbar-group" role="group" aria-label="List type">
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBulletList().run()}
-          isActive={editor.isActive('bulletList')}
+          isActive={toolbarState.bulletList}
           aria-label="Bullet list"
-          aria-pressed={editor.isActive('bulletList')}
+          aria-pressed={toolbarState.bulletList}
         >
           • List
         </ToolbarButton>
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          isActive={editor.isActive('orderedList')}
+          isActive={toolbarState.orderedList}
           aria-label="Numbered list"
-          aria-pressed={editor.isActive('orderedList')}
+          aria-pressed={toolbarState.orderedList}
         >
           1. List
         </ToolbarButton>
@@ -236,8 +252,8 @@ function ReEmailToolbar() {
         <ToolbarButton
           onClick={() => changeIndent(1)}
           disabled={
-            !indentState.canSink &&
-            (indentState.inList || !indentState.indentBlock || indentState.blockIndent >= MAX_INDENT)
+            !toolbarState.canSink &&
+            (toolbarState.inList || !toolbarState.indentBlock || toolbarState.blockIndent >= MAX_INDENT)
           }
           aria-label="Increase indent"
         >
@@ -246,8 +262,8 @@ function ReEmailToolbar() {
         <ToolbarButton
           onClick={() => changeIndent(-1)}
           disabled={
-            !indentState.canLift &&
-            (indentState.inList || !indentState.indentBlock || indentState.blockIndent <= 0)
+            !toolbarState.canLift &&
+            (toolbarState.inList || !toolbarState.indentBlock || toolbarState.blockIndent <= 0)
           }
           aria-label="Decrease indent"
         >
