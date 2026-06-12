@@ -1,49 +1,13 @@
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useEditor, useEditorState, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import Underline from '@tiptap/extension-underline'
 import { useState, useCallback } from 'react'
 import { TEST_HTML } from '../../test-content'
 import { serializeToEmailHTML } from '../../email-serializer'
+import { formatHTML } from '../../format-html'
+import { Indent } from '../../indent-extension'
 import './TipTapEditor.css'
 
 type HeadingLevel = 1 | 2 | 3
-
-const BLOCK_TAGS = new Set(['h1', 'h2', 'h3', 'p', 'ul', 'ol', 'li', 'blockquote'])
-const VOID_TAGS = new Set(['br', 'hr', 'img', 'input', 'link', 'meta'])
-
-function serializeNode(node: Node, depth: number): string {
-  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? ''
-  if (node.nodeType !== Node.ELEMENT_NODE) return ''
-
-  const el = node as Element
-  const tag = el.tagName.toLowerCase()
-  const attrStr = Array.from(el.attributes).map(a => `${a.name}="${a.value}"`).join(' ')
-
-  if (VOID_TAGS.has(tag)) {
-    return attrStr ? `<${tag} ${attrStr}>` : `<${tag}>`
-  }
-
-  const isBlock = BLOCK_TAGS.has(tag)
-  const pad = '  '.repeat(depth)
-  const openTag = attrStr ? `<${tag} ${attrStr}>` : `<${tag}>`
-  const children = Array.from(el.childNodes)
-    .map(child => serializeNode(child, isBlock ? depth + 1 : depth))
-    .join('')
-
-  if (isBlock) {
-    return `\n${pad}${openTag}${children}\n${pad}</${tag}>`
-  }
-  return `${openTag}${children}</${tag}>`
-}
-
-function formatHTML(html: string): string {
-  if (!html) return ''
-  const doc = new DOMParser().parseFromString(html, 'text/html')
-  return Array.from(doc.body.childNodes)
-    .map(node => serializeNode(node, 0))
-    .join('')
-    .trim()
-}
 
 interface ToolbarButtonProps {
   onClick: () => void
@@ -80,10 +44,12 @@ export function TipTapEditor() {
 
   const editor = useEditor({
     extensions: [
+      // StarterKit (TipTap v3) already bundles Underline — adding the
+      // standalone extension again triggers a duplicate-extension warning.
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
       }),
-      Underline,
+      Indent,
     ],
     content: '<p>Start typing here…</p>',
     onUpdate({ editor }) {
@@ -99,7 +65,41 @@ export function TipTapEditor() {
     [editor],
   )
 
-  if (!editor) return null
+  // useEditorState subscribes to editor transactions, so all toolbar state
+  // stays fresh on selection-only changes (which don't bump rawHTML and so
+  // don't re-render this component otherwise). Every isActive/can value the
+  // toolbar renders must flow through this selector — reading editor.isActive
+  // directly in JSX goes stale as soon as the cursor moves.
+  const toolbarState = useEditorState({
+    editor,
+    selector: ({ editor: e }) =>
+      e
+        ? {
+            bold: e.isActive('bold'),
+            italic: e.isActive('italic'),
+            underline: e.isActive('underline'),
+            strike: e.isActive('strike'),
+            heading1: e.isActive('heading', { level: 1 }),
+            heading2: e.isActive('heading', { level: 2 }),
+            heading3: e.isActive('heading', { level: 3 }),
+            paragraph: e.isActive('paragraph'),
+            bulletList: e.isActive('bulletList'),
+            orderedList: e.isActive('orderedList'),
+            canSink: e.can().sinkListItem('listItem'),
+            canLift: e.can().liftListItem('listItem'),
+            canIndent: e.can().indent(),
+            canOutdent: e.can().outdent(),
+          }
+        : null,
+  })
+
+  if (!editor || !toolbarState) return null
+
+  const headingActive: Record<HeadingLevel, boolean> = {
+    1: toolbarState.heading1,
+    2: toolbarState.heading2,
+    3: toolbarState.heading3,
+  }
 
   const displayedOutput =
     outputMode === 'raw' ? rawHTML
@@ -187,17 +187,27 @@ export function TipTapEditor() {
 
           <ToolbarSeparator />
 
-          <div className="toolbar-group" role="group" aria-label="List indentation">
+          {/* Hybrid indent: inside a list, promote/demote the list item;
+              otherwise adjust the text indent on the paragraph/heading. */}
+          <div className="toolbar-group" role="group" aria-label="Indentation">
             <ToolbarButton
-              onClick={() => editor.chain().focus().sinkListItem('listItem').run()}
-              disabled={!editor.can().sinkListItem('listItem')}
+              onClick={() =>
+                editor.can().sinkListItem('listItem')
+                  ? editor.chain().focus().sinkListItem('listItem').run()
+                  : editor.chain().focus().indent().run()
+              }
+              disabled={!indentState.canSink && !indentState.canIndent}
               aria-label="Increase indent"
             >
               →
             </ToolbarButton>
             <ToolbarButton
-              onClick={() => editor.chain().focus().liftListItem('listItem').run()}
-              disabled={!editor.can().liftListItem('listItem')}
+              onClick={() =>
+                editor.can().liftListItem('listItem')
+                  ? editor.chain().focus().liftListItem('listItem').run()
+                  : editor.chain().focus().outdent().run()
+              }
+              disabled={!indentState.canLift && !indentState.canOutdent}
               aria-label="Decrease indent"
             >
               ←

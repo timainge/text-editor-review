@@ -1,8 +1,9 @@
 import { useRef, useState, useCallback } from 'react'
-import { useCurrentEditor } from '@tiptap/react'
+import { useCurrentEditor, useEditorState } from '@tiptap/react'
 import { EmailEditor, type EmailEditorRef } from '@react-email/editor'
 import { TEST_HTML } from '../../test-content'
 import { styleHTMLForEmail } from '../../email-serializer'
+import { formatHTML } from '../../format-html'
 import './ReactEmailEditor.css'
 
 // ---------------------------------------------------------------------------
@@ -32,12 +33,12 @@ function ToolbarButton({
   return (
     <button
       type="button"
-      onMouseDown={(e) => {
-        // Prevent the editor from losing focus (and selection) on mousedown.
-        // Without this, the selection is cleared before onClick fires.
-        e.preventDefault()
-        if (!disabled) onClick()
-      }}
+      // Prevent the editor from losing focus (and selection) on mousedown.
+      // Without this, the selection is cleared before onClick fires.
+      // The command itself runs in onClick so keyboard activation
+      // (Enter/Space) works too — onMouseDown never fires for keyboards.
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
       disabled={disabled}
       data-active={isActive || undefined}
       className="toolbar-btn"
@@ -52,13 +53,104 @@ function ToolbarSeparator() {
   return <div className="toolbar-sep" role="separator" aria-orientation="vertical" />
 }
 
+// ---------------------------------------------------------------------------
+// Text indent helpers (hybrid indent buttons)
+//
+// Custom TipTap extensions: @react-email/editor v1.5.4 DOES expose an
+// `extensions?: Extensions` prop on EmailEditor (dist/index.d.mts), but it
+// REPLACES the built-in extension set rather than extending it — in
+// dist/index.mjs the editor does `extensionsProp ?? [StarterKit, Placeholder,
+// EmailTheming]`. Passing our own indent extension would mean rebuilding and
+// maintaining their entire email schema, so we don't.
+//
+// Instead we lean on their built-in StyleAttribute extension (part of their
+// StarterKit, exported from @react-email/editor/extensions), which already
+// registers a generic `style` attribute on paragraph and heading nodes that
+// the node views render. We read/write an email-safe `margin-left:{n*2}em`
+// in that attribute via updateAttributes.
+//
+// Known quirk of their StyleAttribute: it resets the paragraph style on
+// Enter, so text indent does not carry over to the next paragraph.
+// ---------------------------------------------------------------------------
+
+const MAX_INDENT = 4
+
+function getIndentFromStyle(style: string): number {
+  const match = /margin-left:\s*([\d.]+)em/.exec(style)
+  if (!match) return 0
+  return Math.min(MAX_INDENT, Math.max(0, Math.round(parseFloat(match[1]) / 2)))
+}
+
+function styleWithIndent(style: string, indent: number): string {
+  const rest = style
+    .split(';')
+    .map((part) => part.trim())
+    .filter((part) => part && !part.startsWith('margin-left'))
+  if (indent > 0) rest.push(`margin-left:${indent * 2}em`)
+  return rest.join(';')
+}
+
 function ReEmailToolbar() {
   const { editor } = useCurrentEditor()
 
-  if (!editor) return null
+  // Hybrid indent state: inside a list, promote/demote the list item;
+  // otherwise adjust margin-left on the paragraph/heading via the built-in
+  // StyleAttribute extension (see comment above the helpers).
+  //
+  // useEditorState subscribes to editor transactions, so the disabled state
+  // stays fresh on selection-only changes — useCurrentEditor alone does not
+  // re-render this toolbar when the cursor moves.
+  const indentState = useEditorState({
+    editor,
+    selector: ({ editor: e }) => {
+      if (!e) return null
+      const inList = e.isActive('listItem')
+      const indentBlock =
+        e.isActive('heading') ? 'heading'
+        : e.isActive('paragraph') ? 'paragraph'
+        : null
+      const blockStyle = indentBlock ? ((e.getAttributes(indentBlock).style as string) || '') : ''
+      return {
+        canSink: e.can().sinkListItem('listItem'),
+        canLift: e.can().liftListItem('listItem'),
+        inList,
+        indentBlock,
+        blockIndent: getIndentFromStyle(blockStyle),
+      }
+    },
+  })
+
+  if (!editor || !indentState) return null
 
   const toggleHeading = (level: HeadingLevel) =>
     editor.chain().focus().toggleHeading({ level }).run()
+
+  // Compute everything at click time — render-time values could be stale.
+  const changeIndent = (delta: 1 | -1) => {
+    if (delta === 1 && editor.can().sinkListItem('listItem')) {
+      editor.chain().focus().sinkListItem('listItem').run()
+      return
+    }
+    if (delta === -1 && editor.can().liftListItem('listItem')) {
+      editor.chain().focus().liftListItem('listItem').run()
+      return
+    }
+    if (editor.isActive('listItem')) return
+    const indentBlock =
+      editor.isActive('heading') ? 'heading'
+      : editor.isActive('paragraph') ? 'paragraph'
+      : null
+    if (!indentBlock) return
+    const blockStyle = (editor.getAttributes(indentBlock).style as string) || ''
+    const blockIndent = getIndentFromStyle(blockStyle)
+    const next = Math.min(MAX_INDENT, Math.max(0, blockIndent + delta))
+    if (next === blockIndent) return
+    editor
+      .chain()
+      .focus()
+      .updateAttributes(indentBlock, { style: styleWithIndent(blockStyle, next) })
+      .run()
+  }
 
   return (
     <div className="toolbar re-toolbar" role="toolbar" aria-label="Text formatting">
@@ -140,17 +232,23 @@ function ReEmailToolbar() {
 
       <ToolbarSeparator />
 
-      <div className="toolbar-group" role="group" aria-label="List indentation">
+      <div className="toolbar-group" role="group" aria-label="Indentation">
         <ToolbarButton
-          onClick={() => editor.chain().focus().sinkListItem('listItem').run()}
-          disabled={!editor.can().sinkListItem('listItem')}
+          onClick={() => changeIndent(1)}
+          disabled={
+            !indentState.canSink &&
+            (indentState.inList || !indentState.indentBlock || indentState.blockIndent >= MAX_INDENT)
+          }
           aria-label="Increase indent"
         >
           →
         </ToolbarButton>
         <ToolbarButton
-          onClick={() => editor.chain().focus().liftListItem('listItem').run()}
-          disabled={!editor.can().liftListItem('listItem')}
+          onClick={() => changeIndent(-1)}
+          disabled={
+            !indentState.canLift &&
+            (indentState.inList || !indentState.indentBlock || indentState.blockIndent <= 0)
+          }
           aria-label="Decrease indent"
         >
           ←
@@ -199,34 +297,6 @@ const BUBBLE_MENU_HIDE_NODES = [
 ]
 
 const BUBBLE_MENU_HIDE_MARKS = ['link']
-
-// ---------------------------------------------------------------------------
-// Pretty-print helpers
-// ---------------------------------------------------------------------------
-
-const BLOCK_TAGS = new Set(['h1','h2','h3','p','ul','ol','li','blockquote'])
-const VOID_TAGS = new Set(['br','hr','img','input','link','meta'])
-
-function serializeNode(node: Node, depth: number): string {
-  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? ''
-  if (node.nodeType !== Node.ELEMENT_NODE) return ''
-  const el = node as Element
-  const tag = el.tagName.toLowerCase()
-  const attrStr = Array.from(el.attributes).map(a => `${a.name}="${a.value}"`).join(' ')
-  if (VOID_TAGS.has(tag)) return attrStr ? `<${tag} ${attrStr}>` : `<${tag}>`
-  const isBlock = BLOCK_TAGS.has(tag)
-  const pad = '  '.repeat(depth)
-  const openTag = attrStr ? `<${tag} ${attrStr}>` : `<${tag}>`
-  const children = Array.from(el.childNodes).map(child => serializeNode(child, isBlock ? depth + 1 : depth)).join('')
-  if (isBlock) return `\n${pad}${openTag}${children}\n${pad}</${tag}>`
-  return `${openTag}${children}</${tag}>`
-}
-
-function formatHTML(html: string): string {
-  if (!html) return ''
-  const doc = new DOMParser().parseFromString(html, 'text/html')
-  return Array.from(doc.body.childNodes).map(node => serializeNode(node, 0)).join('').trim()
-}
 
 // ---------------------------------------------------------------------------
 // Main component

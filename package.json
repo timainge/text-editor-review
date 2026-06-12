@@ -11,7 +11,6 @@
   },
   "dependencies": {
     "@react-email/editor": "^1.5.4",
-    "@tiptap/extension-underline": "^3.26.1",
     "@tiptap/pm": "^3.26.1",
     "@tiptap/react": "^3.26.1",
     "@tiptap/starter-kit": "^3.26.1",

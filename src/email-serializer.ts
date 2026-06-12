@@ -1,23 +1,30 @@
 import type { JSONContent } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
-import Underline from '@tiptap/extension-underline'
 import {
   renderToHTMLString,
   serializeChildrenToHTMLString,
 } from '@tiptap/static-renderer/pm/html-string'
 import type { Node as PmNode, Mark as PmMark } from '@tiptap/pm/model'
 import type { NodeProps, MarkProps } from '@tiptap/static-renderer'
+import { Indent } from './indent-extension'
 
 type NodeRenderer = (ctx: NodeProps<PmNode, string | string[]>) => string
 type MarkRenderer = (ctx: MarkProps<PmMark, string | string[], PmNode>) => string
+
+// Email-safe text indent (margin-left, not text-indent) for paragraph/heading
+// blocks carrying the `indent` attribute from src/indent-extension.ts.
+function indentStyle(node: PmNode): string {
+  const indent = (node.attrs?.indent as number) ?? 0
+  return indent > 0 ? `;margin-left:${indent * 2}em` : ''
+}
 
 const nodeMapping: Record<string, NodeRenderer> = {
   doc({ children }) {
     return serializeChildrenToHTMLString(children)
   },
 
-  paragraph({ children }) {
-    return `<p style="margin:0;padding:0;font-size:1em;line-height:1.6;padding-top:0.5em;padding-bottom:0.5em">${serializeChildrenToHTMLString(children)}</p>`
+  paragraph({ node, children }) {
+    return `<p style="margin:0;padding:0;font-size:1em;line-height:1.6;padding-top:0.5em;padding-bottom:0.5em${indentStyle(node)}">${serializeChildrenToHTMLString(children)}</p>`
   },
 
   heading({ node, children }) {
@@ -28,7 +35,7 @@ const nodeMapping: Record<string, NodeRenderer> = {
       3: 'font-size:1.17em;font-weight:bold;line-height:1.3;margin-top:0;margin-bottom:0.3em;mso-line-height-rule:exactly',
     }
     const style = styles[level] ?? styles[3]
-    return `<h${level} style="${style}">${serializeChildrenToHTMLString(children)}</h${level}>`
+    return `<h${level} style="${style}${indentStyle(node)}">${serializeChildrenToHTMLString(children)}</h${level}>`
   },
 
   bulletList({ children }) {
@@ -84,7 +91,10 @@ const nodeMappingWithFallback = new Proxy(nodeMapping, {
   },
 })
 
-const extensions = [StarterKit, Underline]
+// Indent must be registered here too — the serializer builds its schema from
+// this list, and Node.fromJSON would otherwise drop the `indent` attribute.
+// Underline comes bundled with StarterKit in TipTap v3.
+const extensions = [StarterKit, Indent]
 
 const EMAIL_STYLES: Record<string, string> = {
   p: 'margin:0;padding:0;font-size:1em;line-height:1.6;padding-top:0.5em;padding-bottom:0.5em',
@@ -101,7 +111,15 @@ const EMAIL_STYLES: Record<string, string> = {
 
 function applyEmailStyles(el: Element): void {
   const tag = el.tagName.toLowerCase()
-  if (EMAIL_STYLES[tag]) el.setAttribute('style', EMAIL_STYLES[tag])
+  if (EMAIL_STYLES[tag]) {
+    // Preserve indentation the editor wrote as an inline margin-left before
+    // overwriting the style attribute with the canned email-safe styles.
+    const marginLeft = el instanceof HTMLElement ? el.style.marginLeft : ''
+    el.setAttribute(
+      'style',
+      marginLeft ? `${EMAIL_STYLES[tag]};margin-left:${marginLeft}` : EMAIL_STYLES[tag],
+    )
+  }
   if (tag === 's') {
     el.innerHTML = `<span style="text-decoration:line-through">${el.innerHTML}</span>`
   } else {
