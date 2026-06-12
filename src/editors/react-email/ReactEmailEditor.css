@@ -1,0 +1,11 @@
+.re-editor-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.re-editor-content {
+  flex: 1;
+  overflow-y: auto;
+  /* The EmailEditor renders its own toolbar and content area */
+}

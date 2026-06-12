@@ -1,0 +1,26 @@
+.tt-editor-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.tt-editor-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  min-height: 200px;
+}
+
+/* TipTap renders a div with class ProseMirror */
+.tt-editor-content .ProseMirror {
+  outline: none;
+  min-height: 200px;
+}
+
+.tt-editor-content .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #aaa;
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
