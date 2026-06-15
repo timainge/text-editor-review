@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { TipTapEditor } from './editors/tiptap/TipTapEditor'
 import { ReactEmailEditorWrapper } from './editors/react-email/ReactEmailEditor'
+import { KendoEditor } from './editors/kendo/KendoEditor'
 import './App.css'
 
-type Tab = 'tiptap' | 'react-email'
+type Tab = 'tiptap' | 'react-email' | 'kendo'
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('tiptap')
@@ -12,7 +13,7 @@ export default function App() {
     <div className="app">
       <header className="app-header">
         <h1 className="app-title">Rich Text Editor Comparison</h1>
-        <p className="app-subtitle">TipTap Headless vs React Email Editor</p>
+        <p className="app-subtitle">TipTap Headless vs React Email Editor vs KendoReact (Telerik)</p>
       </header>
 
       <nav className="tab-nav" role="tablist" aria-label="Editor implementations">
@@ -36,6 +37,16 @@ export default function App() {
         >
           React Email Editor
         </button>
+        <button
+          role="tab"
+          aria-selected={activeTab === 'kendo'}
+          aria-controls="panel-kendo"
+          id="tab-kendo"
+          className="tab-btn"
+          onClick={() => setActiveTab('kendo')}
+        >
+          KendoReact (Telerik)
+        </button>
       </nav>
 
       <main className="tab-panels">
@@ -56,6 +67,15 @@ export default function App() {
           className="tab-panel"
         >
           <ReactEmailEditorWrapper />
+        </div>
+        <div
+          role="tabpanel"
+          id="panel-kendo"
+          aria-labelledby="tab-kendo"
+          hidden={activeTab !== 'kendo'}
+          className="tab-panel"
+        >
+          <KendoEditor />
         </div>
       </main>
     </div>

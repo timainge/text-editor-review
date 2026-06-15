@@ -309,3 +309,22 @@ const handleReady = useCallback((editorRef: EmailEditorRef) => {
 
 - Static review of `src/App.tsx`, `src/App.css`, `src/index.css`, both editor components/CSS, plus `@tiptap/core` and `@tiptap/extension-list` dist sources.
 - Empirical: dev server on port 5198, Playwright-driven Chromium. Real `Enter`/`Space` key presses on focused toolbar buttons; real `Shift+Tab` traversal from the contenteditable; accessibility-tree/DOM inspection for `tabindex`, `aria-*`, and focus order. React Email Bold ignored both keys with a live text selection; the equivalent TipTap activation applied `<strong>` and moved focus into the editor. (Caveat: another session was editing the codebase and sharing the browser during testing; each result above was re-confirmed against the current file state on port 5198.)
+
+---
+
+## 11. KendoReact (Telerik) toolbar — addendum (2026-06-15)
+
+**Scope:** the third exhibit, `src/editors/kendo/KendoEditor.tsx`. Unlike the two toolbars above (hand-built from native `<button>`s), KendoReact renders its **own** toolbar from `@progress/kendo-react-buttons` `Button`s inside a KendoReact `Toolbar`. So most a11y behavior is the vendor's, not ours.
+
+**Method caveat:** this section is a **static / source-level** review only. The environment that added this exhibit had **no browser-automation tooling**, so — unlike findings 1–10, which were Playwright-verified — the keyboard/screen-reader claims here have **not** been confirmed in a live browser. They are marked accordingly and listed as open items in `research/kendo-notes.md` §9.
+
+| Criterion | KendoReact toolbar | Ours or inherent |
+|---|---|---|
+| Keyboard activation (Enter/Space) | Expected to work — tools render real `<button>`s; built-in tools use an internal `onDownPreventDefault` (mousedown guard) with activation on click, the same split finding 1 prescribes. **Not browser-verified here.** | Inherent (vendor) for built-in tools; **ours** for the custom H1/H2/H3/P tools, which explicitly use `onMouseDown preventDefault` + `onClick` (`KendoEditor.tsx:60–66`). |
+| `aria-pressed` on marks/headings | Built-in mark tools expose toggle state via Kendo's `Button` `togglable`/`selected`. Custom heading tools set `selected`, `togglable`, **and** an explicit `aria-pressed={active}`. | Mixed — vendor for marks, ours for headings. |
+| Live active state on caret move | Native — Kendo re-renders every tool with a fresh `view` each transaction (no `useEditorState` equivalent needed). | Inherent. |
+| Roving tabindex / arrow keys | KendoReact `Toolbar` *does* implement roving focus with arrow keys (its documented behavior) — potentially **better** than our two hand-built toolbars, which have 12 plain tab stops. **Not verified here.** | Inherent (if confirmed). |
+| Focus order matches visual order | Toolbar precedes content in Kendo's DOM (no `order:-1` hack like React Email). | Inherent. |
+| Editor textbox accessible name | Kendo applies a content-area `aria-label`/labelled-by to the editable. | Inherent. |
+
+**Net:** on paper KendoReact's toolbar is the **strongest** of the three for accessibility — real buttons, native toggle state, native roving-tabindex, correct focus order — because it's a maintained vendor component rather than hand-rolled. The honest asterisk is that none of it was confirmed in a browser in this session; a live keyboard + screen-reader pass (and a check that the global Kendo theme doesn't disturb the other tabs' focus styling) is the outstanding work. Any defects found there would be **inherent** (vendor), with our only lever being issue reports or config — except the custom heading tools, which are ours to fix.

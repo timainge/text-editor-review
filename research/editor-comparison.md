@@ -1,8 +1,10 @@
-# Editor Comparison — TipTap (Headless) vs `@react-email/editor`
+# Editor Comparison — TipTap (Headless) vs `@react-email/editor` vs KendoReact (Telerik)
 
-**Date:** 2026-06-12
-**Packages compared:** `@tiptap/*` 3.26.1 (headless, hand-built toolbar) vs `@react-email/editor` 1.5.4
-**Scope:** Final write-up for the stated requirements — email-safe rich text editing in forms: bold/italic/underline/strikethrough, H1–H3, paragraph, bullet/ordered lists, hybrid indent/outdent, fixed toolbar, and a 3-mode output panel (Raw / Pretty / Email-safe). Both implementations now meet all requirements; this document evaluates what it took, and which is the better long-term option.
+**Date:** 2026-06-12 (TipTap / React Email); **2026-06-15** (KendoReact added)
+**Packages compared:** `@tiptap/*` 3.26.1 (headless, hand-built toolbar) vs `@react-email/editor` 1.5.4 vs `@progress/kendo-react-editor` 15.0.0 (Telerik, batteries-included)
+**Scope:** Final write-up for the stated requirements — email-safe rich text editing in forms: bold/italic/underline/strikethrough, H1–H3, paragraph, bullet/ordered lists, hybrid indent/outdent, fixed toolbar, and a 3-mode output panel (Raw / Pretty / Email-safe). All three implementations now meet the requirements; this document evaluates what it took, and which is the better long-term option.
+
+> **KendoReact addendum (2026-06-15).** A third exhibit, the commercial KendoReact Editor, was added at the maintainer's request. Its full write-up is in **`research/kendo-notes.md`**; this document folds it into the executive summary (§1.1) and the comparison table (§4). One caveat that colours its rows: the environment that built it had **no browser-automation tools**, so KendoReact's claims are verified from package source + a headless jsdom round-trip, not a live browser (the other two were Playwright-verified). See `research/kendo-notes.md` §9.
 
 Every claim below traces to code in this repo, one of the other research files, or a checkable external fact (npm registry, package dist sources). Facts that could *not* be re-verified are flagged inline.
 
@@ -33,6 +35,16 @@ Both editors now meet every stated requirement, so the decision rests on *how* t
 - Footprint and maturity: the TipTap stack is 53 packages / ~8.9 MB installed; `@react-email/editor` pulls **192 packages** transitively — including the entire `react-email` CLI (esbuild, socket.io, tailwindcss) — and is **under four months old** (first npm publish 2026-02-18, 1.0.0 on 2026-04-16, 32 stable releases since).
 
 `@react-email/editor` is not a bad package — it is a *mismatched* one. Its value proposition is full email-template composition (sections, columns, buttons, images, theming, `getEmailHTML()` producing complete email documents). Our requirement is a constrained rich-text field in a form. We spent most of our React Email effort *suppressing* its features, which is the clearest possible signal that we are paying for capability we don't want and fighting defaults we can't configure.
+
+### 1.1 Where KendoReact (Telerik) lands
+
+**Recommendation unchanged: headless TipTap for this use case.** KendoReact is the *strongest* of the three on several axes and the weakest on the two that matter most here.
+
+- **It is the least code and the fewest workarounds.** The exhibit is 266 lines total (vs TipTap 320, React Email 478) with **zero** CSS suppression hacks, because the fixed toolbar, live selection state, keyboard-accessible buttons, and — notably — the **hybrid indent** all ship natively. Kendo's Indent tool is list-aware *and* emits email-safe `margin-left` out of the box, which is exactly the behavior TipTap needed an 84-line custom extension for.
+- **Its content model is clean.** Plain HTML string out, so the email-safe path reuses the shared `styleHTMLForEmail` with a one-rule tag fix (`<del>`→`<s>`); no proprietary nodes (contrast React Email). Low storage lock-in, and it is the most *mature* of the three (created 2019, 1454 published versions, Telerik support).
+- **But it is commercial and heavy.** Without a license key it renders a **watermark** and logs a console error on every render (non-blocking, but inherent — no code fix). And it is the heaviest by far: **434 packages**, a **704 KB global theme**, a **4.25 MB** JS bundle. For a single constrained rich-text field, that is a steep price in licensing cost, bundle weight, and a whole component-suite dependency — to land in the *same place* TipTap reaches with five `@tiptap/*` packages and no license.
+
+So Kendo would be the right call for a team **already standardised on KendoReact** (the license and bundle are sunk costs, and you inherit a vetted, supported, accessible component) — but for a greenfield, single-field email-safe editor, TipTap remains the recommendation. See `research/kendo-notes.md` for the full evaluation and the open browser-verification items.
 
 ---
 
@@ -89,15 +101,15 @@ Both editors now meet every stated requirement, so the decision rests on *how* t
 
 ## 4. Comparison Table
 
-| Criterion | TipTap (headless) | `@react-email/editor` | Notes |
-|---|---|---|---|
-| **Complexity (to meet our requirements)** | ✅ Lower — 236-line wrapper + 84-line extension, all on documented APIs | ⚠️ Higher — 383-line wrapper + 3 workarounds (CSS reorder, bubble-menu suppression, StyleAttribute indent) requiring dist-source archaeology | Counter-intuitive: the packaged editor cost more code |
-| **Reliability** | ✅ One issue total, ours (duplicate underline) | ⚠️ Two cosmetic upstream warnings (unkeyed marks, blur TextSelection), one indent quirk (style reset on Enter), one bug ours (mousedown) | `research/known-issues.md`; all cosmetic, none data-corrupting |
-| **Flexibility** | ✅ Total — every node/mark/command/serialized byte is ours; `extend()`/custom extensions are first-class | ❌ All-or-nothing — `extensions` prop replaces the built-in set; non-re-exported internals (`Placeholder`, `EmailTheming`); UI removable only via CSS | Verified in `dist/index.mjs:196–207`, `dist/extensions/index.d.mts` |
-| **Accessibility** | ✅ Clean structure (toolbar first in DOM); remaining gaps are ours and fixable (`aria-pressed`, roving tabindex) | ⚠️ Same fixable gaps **plus** a structural one: focus order inverted by the children-rendering design (portal workaround needed) | `research/accessibility.md` summary table |
-| **Email-safe output quality** | ✅ JSON → `static-renderer` with exact per-node inline styles; deterministic; serializer is the source of truth | ⚠️ DOM-walk over raw HTML (our fallback); its native `getEmailHTML()` emits full documents — wrong shape for form fragments | `src/email-serializer.ts`; `todo.md:50` |
-| **Dependency footprint** | ✅ 5 direct `@tiptap/*` packages (one droppable), 53 packages / ~8.9 MB installed | ❌ 1 direct package (1.7 MB) but **192 transitive packages**, incl. `react-email@6.6.0` CLI (7.6 MB) pulling esbuild, socket.io, tailwindcss; ships react-dom's server renderer to the browser (187 KB chunk in our build) | `npm ls --all`; `du -sh`; `dist/assets/server.browser-*.js`. Note: `@react-email/editor` itself depends on `@tiptap/*` ^3.17.1 — choosing it means TipTap *plus* their layer |
-| **Maturity** | ✅ npm since 2018 (v1), `@tiptap/core` since 2020-11, v2 2023-03, v3 stable 2025-07; large ecosystem | ❌ First publish 2026-02-18 (experimental); 1.0.0 2026-04-16; 32 stable releases in ~8 weeks to 1.5.4 | `npm view … time`. Fast iteration cuts both ways: responsive, but churning |
+| Criterion | TipTap (headless) | `@react-email/editor` | KendoReact (Telerik) | Notes |
+|---|---|---|---|---|
+| **Complexity (to meet our requirements)** | ✅ Lower — 236-line wrapper + 84-line extension, all on documented APIs | ⚠️ Higher — 383-line wrapper + 3 workarounds (CSS reorder, bubble-menu suppression, StyleAttribute indent) requiring dist-source archaeology | ✅ Lowest LOC — 266 total, **0 CSS hacks**; toolbar/live-state/a11y/**hybrid indent** all native. Cost is conceptual (learn Kendo's tool + theme model), not lines | Counter-intuitive overall: the from-scratch headless option and the commercial packaged option both beat the OSS packaged one |
+| **Reliability** | ✅ One issue total, ours (duplicate underline) | ⚠️ Two cosmetic upstream warnings (unkeyed marks, blur TextSelection), one indent quirk (style reset on Enter), one bug ours (mousedown) | ⚠️ **License watermark + console error** on every render without a key (inherent); deterministic HTML otherwise. Edge cases not browser-verified here | `research/known-issues.md` §4; Kendo's is a licensing artifact, not a bug |
+| **Flexibility** | ✅ Total — every node/mark/command/serialized byte is ours; `extend()`/custom extensions are first-class | ❌ All-or-nothing — `extensions` prop replaces the built-in set; non-re-exported internals (`Placeholder`, `EmailTheming`); UI removable only via CSS | ✅ Full ProseMirror surface exposed (`EditorUtils`, `ProseMirror` ns, `createProseMirrorTool`); custom tool ≈ 9 lines. Gated by commercial license outside the model | KendoReact custom heading tools added in ~36 lines (`KendoEditor.tsx:46–82`) |
+| **Accessibility** | ✅ Clean structure (toolbar first in DOM); remaining gaps are ours and fixable (`aria-pressed`, roving tabindex) | ⚠️ Same fixable gaps **plus** a structural one: focus order inverted by the children-rendering design (portal workaround needed) | ✅ Native `<button>` tools with correct mousedown/click split + toggle state; likely shares the roving-tabindex gap — live SR/keyboard audit still pending | `research/accessibility.md` §11; Kendo issues are inherent (vendor toolbar), not ours |
+| **Email-safe output quality** | ✅ JSON → `static-renderer` with exact per-node inline styles; deterministic; serializer is the source of truth | ⚠️ DOM-walk over raw HTML (our fallback); its native `getEmailHTML()` emits full documents — wrong shape for form fragments | ✅ Plain HTML string → shared `styleHTMLForEmail` + one-rule `<del>`→`<s>` fix; indent already `margin-left`; no proprietary nodes. jsdom-verified (7/7) | `src/editors/kendo/kendo-email.ts`; `research/kendo-notes.md` §6 |
+| **Dependency footprint** | ✅ 5 direct `@tiptap/*` packages (one droppable), 53 packages / ~8.9 MB installed | ❌ 1 direct package (1.7 MB) but **192 transitive packages**, incl. `react-email@6.6.0` CLI (7.6 MB) pulling esbuild, socket.io, tailwindcss; ships react-dom's server renderer to the browser (187 KB chunk in our build) | ❌ Worst — **434 packages** added, 31 `@progress` (69 MB), 13 `prosemirror-*`, **704 KB global theme CSS**, **4.25 MB** JS bundle, **commercial license** | `npm ls --all`; `du -sh`; build sizes. Note: `@react-email/editor` itself depends on `@tiptap/*` — choosing it means TipTap *plus* their layer |
+| **Maturity** | ✅ npm since 2018 (v1), `@tiptap/core` since 2020-11, v2 2023-03, v3 stable 2025-07; large ecosystem | ❌ First publish 2026-02-18 (experimental); 1.0.0 2026-04-16; 32 stable releases in ~8 weeks to 1.5.4 | ✅ **Most mature** — created 2019-02, **1454 versions**, v15.0.0 2026-05-20, paid Telerik support + extensive docs | `npm view … time`. Kendo trades cost for stability + support |
 
 ---
 

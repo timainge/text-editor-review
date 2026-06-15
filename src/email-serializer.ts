@@ -121,6 +121,10 @@ function applyEmailStyles(el: Element): void {
     )
   }
   if (tag === 's') {
+    // Style any nested marks (e.g. <strong>/<em>/<u> inside the strike) first,
+    // then wrap the styled result in the line-through span. Without the recurse,
+    // marks nested under strikethrough lose their inline styles.
+    Array.from(el.children).forEach(applyEmailStyles)
     el.innerHTML = `<span style="text-decoration:line-through">${el.innerHTML}</span>`
   } else {
     Array.from(el.children).forEach(applyEmailStyles)
