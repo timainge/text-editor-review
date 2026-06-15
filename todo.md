@@ -13,6 +13,19 @@
 - [x] do a write up of each editor, what is required to make it meet the stated requirements and evaluate the complexity, reliability, flexibility of both. given that we have made both meet the requirement evaluate what other considerations make either one a better long term option. → `research/editor-comparison.md`
   - Recommendation: **headless TipTap** for email-safe rich text in forms — less code (236 lines vs 383 despite being from scratch), zero workarounds, full serialization control, neutral JSON storage format, 53 vs 192 transitive packages, mature ecosystem. `@react-email/editor` flips to the right answer only if requirements grow into whole-email design (sections, columns, buttons, images).
 
+## KendoReact (Telerik) — third editor (added 2026-06-15)
+
+- [x] Add the Telerik KendoReact Editor (`@progress/kendo-react-editor` 15.0.0) as a third comparison exhibit → `src/editors/kendo/`, registered in `App.tsx`. Full write-up: `research/kendo-notes.md`.
+  - **Classification:** batteries-included (ships its own toolbar — we use it natively, per the playbook's Telerik note); native React component; **HTML-string** content model (ProseMirror internally); **commercial** license.
+  - **Control set:** Bold/Italic/Underline/Strikethrough, bullet/ordered list, and indent/outdent are **built-in tools**. Headings ship only as a FormatBlock *dropdown*, so discrete **H1/H2/H3/P are custom tools** (`createBlockTool`, ~36 lines) via `EditorUtils.formatBlockElements`/`getBlockFormats` — the documented extension path.
+  - **Hybrid indent is NATIVE** — Kendo's Indent tool sinks/lifts list items inside lists and emits email-safe `margin-left` on blocks (`config/indent-rules.js`). No custom extension needed (contrast TipTap's 84-line one).
+  - **Live toolbar state is FREE** — Kendo re-renders every tool with a fresh `view` per transaction; no `useEditorState`-equivalent wiring.
+  - **Email-safe:** HTML-string path — reuse shared `styleHTMLForEmail` after a local `<del>`→`<s>` normalization (`src/editors/kendo/kendo-email.ts`). Verified via headless jsdom round-trip (7/7 assertions). No proprietary nodes (contrast React Email).
+  - **Findings:** (1) **license watermark + console error** without a key — inherent, no code fix (`research/known-issues.md` §4); (2) **footprint** — 434 packages, 704 KB global theme CSS, 4.25 MB JS bundle (`research/kendo-notes.md` §7); (3) visual divergence (native Kendo chrome, not the shared `.toolbar` classes) — allowed by the playbook, noted.
+  - `npx tsc --noEmit` and `npm run build` pass.
+- [ ] **Browser-verify the KendoReact exhibit** — this session had no Playwright/browser MCP, so the live checks the playbook requires were NOT done: watermark appearance, console output, live caret-movement toolbar updates, mouse+keyboard activation, tab-switch lifecycle, focus order, and that the global Kendo theme doesn't disturb the other two tabs. Logic + serialization were verified from source + jsdom. See `research/kendo-notes.md` §9.
+- [ ] Recommendation revisited (`research/editor-comparison.md` §1.1): **unchanged — headless TipTap** for a greenfield single-field email-safe editor. KendoReact would be the right call for a team already standardised on KendoReact (license + bundle already sunk; inherits a mature, supported, accessible component).
+
 ## React Email Editor — toolbar & styling
 
 - [x] Research `@react-email/editor` toolbar configuration API → `research/react-email-toolbar.md`

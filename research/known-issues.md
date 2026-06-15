@@ -219,13 +219,40 @@ if (clearSelectionOnBlur) transaction.setSelection(TextSelection.create(transact
 
 ---
 
+## 4. KendoReact (Telerik) — license watermark + console message (no key)
+
+**Added:** 2026-06-15, with the KendoReact exhibit (`@progress/kendo-react-editor` 15.0.0).
+
+### Exact behavior
+
+With **no Telerik license key activated**, `@progress/kendo-licensing` logs (via `console.error`/`console.warn`) a *"No license found for Editor v15.0.0…"* message, and the Editor renders a **watermark overlay** carrying the same notice. The editor stays fully functional.
+
+### Reproduced
+
+**Not in a live browser** — this environment had no browser tooling. Established from package source instead: `Editor.mjs` sets `this.showLicenseWatermark = !validatePackage(metadata, { component: 'Editor' })` and renders `showLicenseWatermark && createElement(Watermark, { message })` (lines 107, 220); the messages and `console.error`/`console.warn` calls live in `@progress/kendo-licensing/dist/index.js` (`"No license found for …"`, `no_license_watermark` URLs). High confidence it appears on every render until a key is set; the on-screen appearance should still be eyeballed in a browser (open item, `kendo-notes.md` §9).
+
+### Root cause & verdict
+
+**Inherent to the commercial product, not our code.** It is the licensing mechanism working as designed. There is no code-side fix: it requires a paid or trial license key set via `setLicenseKey()`, a `kendo-ui-license.txt`, or the `KENDO_UI_LICENSE` env var — none of which was supplied. Per `ADDING_AN_EDITOR.md`, the integration was built and scaffolded honestly *with* the watermark rather than faking a key.
+
+### Impact
+
+**Cosmetic but persistent and outward-facing** — a visible watermark on a shipped UI and steady console noise. Unlike findings 1–3 it cannot be silenced in code; it is a procurement/licensing decision. This is the single biggest day-to-day difference from the two open-source exhibits.
+
+### Upstream issues
+
+n/a — intended vendor behavior, not a bug.
+
+---
+
 ## Summary
 
-| # | Warning | Trigger | Ours or upstream | Upstream issue | Impact |
+| # | Warning / artifact | Trigger | Ours or upstream | Upstream issue | Impact |
 |---|---|---|---|---|---|
 | 1 | `Duplicate extension names found: ['underline']` | Page load (×2 from StrictMode); also Email-safe serialization | **Ours** — standalone `Underline` added alongside TipTap v3 StarterKit (which now bundles it) in `TipTapEditor.tsx` and `email-serializer.ts:97` | n/a | Cosmetic (same extension wins); fix by removing the standalone import |
 | 2 | `Each child in a list should have a unique "key" prop.` | `ref.getEmail()` / `getEmailHTML()` with marked text | **Upstream** — unkeyed `MarkComponent` wrapper in `compose-react-email.tsx` | None found ([#1150](https://github.com/resend/react-email/issues/1150) is `@react-email/render`, unrelated) | Cosmetic (static render, no reconciliation) |
 | 3 | `TextSelection endpoint not pointing into a node with inline content (doc)` | Editor blur (not init) | **Upstream** — `TextSelection.create(doc, 0)` in `focus-scopes.ts` `clearSelectionOnBlur` | None found | Cosmetic (one warning per blur) |
+| 4 | `No license found for Editor v15.0.0…` + on-screen watermark | Every render without a Telerik license key | **Inherent** (commercial licensing, not a bug) | n/a | Visible watermark + console noise; removable only with a paid/trial key |
 
 ## Sources
 
