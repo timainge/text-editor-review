@@ -45,7 +45,7 @@ interface BlockToolProps {
 }
 
 function createBlockTool(tag: BlockTag, label: string, title: string) {
-  return function BlockTool({ view }: BlockToolProps) {
+  function BlockTool({ view }: BlockToolProps) {
     const state = view?.state
     const active = state ? EditorUtils.getBlockFormats(state).includes(tag) : false
     return (
@@ -75,6 +75,12 @@ function createBlockTool(tag: BlockTag, label: string, title: string) {
       </Button>
     )
   }
+  // Kendo keys each toolbar tool by `displayName || name` (Editor.mjs). All four
+  // tools are this same `BlockTool` function, so without a distinct displayName
+  // they collide on the key "BlockTool" → React "two children with the same key"
+  // warning and unreliable reconciliation. Give each a unique displayName.
+  BlockTool.displayName = `BlockTool(${tag})`
+  return BlockTool
 }
 
 const H1 = createBlockTool('h1', 'H1', 'Heading 1')

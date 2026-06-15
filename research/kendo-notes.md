@@ -3,7 +3,7 @@
 **Date:** 2026-06-15
 **Package:** `@progress/kendo-react-editor` 15.0.0 (Telerik / Progress Software) — <https://www.telerik.com/kendo-react-ui/components/editor>
 **Exhibit:** `src/editors/kendo/` (`KendoEditor.tsx` 153 lines, `KendoEditor.css` 58, `kendo-email.ts` 55)
-**Method note (read first):** This environment had **no browser-automation tools** (no Playwright MCP), so the live-browser verification the playbook prescribes (visual render, watermark appearance, console capture, focus-order walk) **could not be performed here** and is listed as an open item below. Everything else was verified two ways: against the package's own source under `node_modules/`, and with a headless jsdom round-trip of the email-safe path (7/7 assertions passing — see §6). Claims that rest only on package source say so.
+**Method note (read first):** This was originally written without browser tooling (source + jsdom only). The **live-browser verification is now complete (2026-06-15, Playwright MCP) — see §9**, which supersedes the old "open items" and records two app-breaking bugs the source/jsdom checks missed (ProseMirror-singleton collisions with TipTap) plus their fixes. One correction surfaced by that work: Kendo does **not** bundle a private ProseMirror fork — `@progress/kendo-editor-common` depends on the standard `prosemirror-*` packages (see §9.1), so a few Step-0/§7 framings below ("bundles its own fork") are inaccurate and corrected in §9.1.
 
 ---
 
@@ -115,11 +115,51 @@ Two footprint caveats specific to Kendo:
 
 ---
 
-## §9 — Open items (honesty)
+## §9 — Live-browser verification (done 2026-06-15, Playwright MCP)
 
-- **No live-browser verification was possible in this environment** (no Playwright/browser MCP tools). Not yet checked in a real browser: the watermark's on-screen appearance, console output, live caret-movement toolbar updates, mouse-vs-keyboard activation, tab-switch lifecycle, focus order, and that the global Kendo theme doesn't visually disturb the TipTap/React Email tabs. All logic and serialization paths *were* verified from source + a headless jsdom harness (§6). These should be confirmed in a browser before relying on the exhibit.
+The live walk the playbook prescribes is now complete — and it **caught two app-breaking runtime bugs that the source + jsdom checks could not see**, plus a console warning. All three are now fixed; the exhibit passes a full live walk in dev and production preview.
+
+### §9.1 — Critical: ProseMirror-singleton collisions with TipTap (FIXED)
+
+**Correction to Step 0 / §7:** the notes assumed Kendo "bundles its own ProseMirror fork." It does not. `@progress/kendo-editor-common` depends on the **standard** `prosemirror-*` packages — the same ones `@tiptap/pm` pulls in. ProseMirror is engineered as a set of **singletons** (each package registers global IDs / relies on `instanceof`), so two copies of any of them in one app collide. Because Kendo **pins exact** prosemirror versions while TipTap uses `^` ranges, npm could not dedupe them, leaving two copies of several packages and one shared copy of `prosemirror-state`.
+
+Two collisions, both fatal at runtime (and invisible to `tsc`/`vite build`, which is precisely why a browser was required):
+
+1. **Blank screen on load** — `RangeError: Duplicate use of selection JSON ID gapcursor`. Two `prosemirror-gapcursor` (TipTap 1.4.1; Kendo pinned 1.4.0) each call `Selection.jsonID("gapcursor")` against the single shared `prosemirror-state` Selection class at import time. The second throws during module evaluation → React never mounts → **all three tabs blank**, not just Kendo.
+2. **Crash on Enter / block-split** — `RangeError: Can not convert <> to a Fragment (looks like multiple versions of prosemirror-model were loaded)`. Kendo's nested `prosemirror-model@1.25.4` built Fragments that failed the `instanceof` check in the shared `prosemirror-model@1.25.8`.
+
+**Fix:** npm `overrides` in `package.json` force a single version of each duplicated package:
+
+```json
+"overrides": {
+  "prosemirror-model": "1.25.8",
+  "prosemirror-gapcursor": "1.4.1",
+  "prosemirror-transform": "1.12.0",
+  "prosemirror-view": "1.41.9"
+}
+```
+
+The pinned versions are the ones TipTap already resolved to, so only Kendo is bumped (patch/minor within 1.x — ProseMirror keeps 1.x back-compatible) and TipTap is untouched. After `npm install`, no nested `prosemirror-*` remain under `@progress`. **Evaluation impact:** this is a genuine integration cost of dropping Kendo into an app that *already* has a ProseMirror-based editor — it does not appear when Kendo is the only editor. Counts against dimension 3 (reliability) for this specific multi-editor repo; an `overrides` block is the standard, low-risk remedy.
+
+### §9.2 — Minor: React duplicate-key warning on the custom heading tools (FIXED)
+
+Kendo keys each toolbar tool by `displayName || name` (`Editor.mjs:171`). All four heading tools are the same inner function `BlockTool` (from `createBlockTool`), so they collided on the key `"BlockTool"` → *"Encountered two children with the same key"* (×4) and unreliable reconciliation. **Fix:** set a unique `BlockTool.displayName = \`BlockTool(${tag})\`` in `createBlockTool`.
+
+### §9.3 — Confirmed live (everything that was source/jsdom-only before)
+
+- **Watermark:** renders as expected — diagonal "Invalid license" tiling across the editable **plus** a Kendo-injected top banner overlay ("License key missing for KendoReact v15.0.0", overlaps the app header). Inherent; no key supplied. Screenshot: `kendo-verified.png`.
+- **Console:** clean except the **2 inherent Kendo license *warnings*** (no errors) once §9.1/§9.2 were fixed — in dev *and* production preview.
+- **Live caret-movement toolbar state (§C3):** moving the caret from an H2 line to a P line flips the buttons' `aria-pressed` with **no click** — confirms the claim that live state is free.
+- **Mouse + keyboard activation (§C4):** mouse clicks work; `Ctrl+B` shortcut works; `Enter` on a focused custom heading button applies the block. Toolbar uses **roving tabindex** (buttons `tabindex=-1`, single tab stop) — good baseline a11y.
+- **Tab-switch lifecycle:** tabs toggle via `hidden`, so Kendo stays mounted; content persists across switches; no errors/leaks observed.
+- **Theme isolation:** the global Kendo theme does **not** visually break or disable the TipTap/React Email tabs — both still render and edit after Kendo loads.
+- **Functional:** B/I/U/S, H1/H2/H3/P, ordered/unordered lists, **hybrid indent both modes** (list item → nested `<ul>`; paragraph → `margin-left:30px`), Load test content, and email-safe output (verified attrs: heading `mso-line-height-rule:exactly` + inline `font-size`; `<li>` `mso-special-format`; `<strong>` inline `font-weight:bold`; **no `class` attrs**; `<del>`→`<s>` double-wrap). Matches the §6 jsdom assertions, now confirmed in-browser.
+
+### §9.4 — Still open
+
 - Email-safe output still unverified in a real email client (shared open item with the other two exhibits).
 - Indent step is `30px` (Kendo default) vs `2em` in the other exhibits — cosmetic only; both serialize as email-safe `margin-left`.
+- A full screen-reader pass (NVDA/VoiceOver) was not run — only the programmatic a11y affordances (roles, `aria-pressed`, roving tabindex, keyboard activation) were checked.
 
 ## Sources
 - This repo: `src/editors/kendo/*`, `src/email-serializer.ts` (`styleHTMLForEmail`), `src/App.tsx`.
