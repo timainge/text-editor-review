@@ -75,6 +75,10 @@ Open the printed URL, pick a tab, hit **Load test content**, and flip the output
 
 `npx tsc --noEmit` type-checks; `npm run build` produces a production build.
 
+## Adding another editor
+
+See **[`ADDING_AN_EDITOR.md`](ADDING_AN_EDITOR.md)** — a playbook for adding a third (or Nth) editor. It defines the editor-agnostic contract, the email-safe output target, the integration points, and the evaluation rubric, deliberately framed so it works for editors wildly different from the two TipTap-based exhibits here (Telerik, CKEditor, Lexical, a Web Component, etc.).
+
 ## Open items
 
 - Verify the email-safe output in a real client (paste into Gmail compose, or a Litmus run)

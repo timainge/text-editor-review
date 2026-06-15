@@ -1,5 +1,7 @@
 # To Do
 
+> Adding another editor? Read **`ADDING_AN_EDITOR.md`** first — contract, email-safe target, integration points, and eval rubric, framed to work for editors very different from the two TipTap-based ones here.
+
 ## General
 - [x] indentation buttons are for text indent not list item indent, though if we wanted to get fancy they could have the effect of providing list hierarchy promotion/demotion for list items and for everything else text indent?
   - Implemented the fancy hybrid in both editors: in a list → sink/lift list item; otherwise → text indent via email-safe `margin-left` (2em steps, clamped 0–8em).
