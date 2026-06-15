@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Editor, EditorTools, EditorUtils } from '@progress/kendo-react-editor'
 import { Button } from '@progress/kendo-react-buttons'
 import type { EditorView } from '@progress/kendo-editor-common'
@@ -59,7 +59,13 @@ function createBlockTool(tag: BlockTag, label: string, title: string) {
         // exhibits use for toolbar buttons over a contenteditable.
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => {
-          if (view) EditorUtils.formatBlockElements(view, tag)
+          if (!view) return
+          // Toggle parity with the other exhibits (which use TipTap's
+          // toggleHeading): clicking an already-active heading reverts it to a
+          // paragraph, matching the pressed/aria-pressed affordance. Paragraph
+          // itself is a plain set — there is nothing to toggle it back to.
+          const target = active && tag !== 'p' ? 'p' : tag
+          EditorUtils.formatBlockElements(view, target)
         }}
         title={title}
         aria-label={title}
@@ -88,6 +94,15 @@ export function KendoEditor() {
   const editorRef = useRef<Editor>(null)
   const [rawHTML, setRawHTML] = useState(INITIAL_CONTENT)
   const [outputMode, setOutputMode] = useState<OutputMode>('raw')
+
+  // Kendo fires onChange only on edits, not on mount, so the raw panel would
+  // otherwise show the literal INITIAL_CONTENT string rather than what Kendo
+  // actually serializes. Seed it from the editor's own output once the view is
+  // ready — the equivalent of TipTap's onCreate / React Email's onReady init.
+  useEffect(() => {
+    const view = editorRef.current?.view
+    if (view) setRawHTML(EditorUtils.getHtml(view.state))
+  }, [])
 
   const loadTestContent = () => {
     const view = editorRef.current?.view

@@ -66,7 +66,7 @@ This is the single biggest practical difference from the two open-source exhibit
 
 Kendo emits an HTML string, so this is the **HTML-string strategy**: reuse the shared `styleHTMLForEmail` from `src/email-serializer.ts` (the same function the React Email exhibit uses) after a tiny, **editor-local** tag normalization.
 
-Confirmed from Kendo's schema source (`kendo-editor-common/dist/es/config/schema.js`): marks serialize via `tagMark()` as `<strong>`, `<em>`, `<u>`, and **`<del>`** for strikethrough. `styleHTMLForEmail` only special-cases `<s>` for the GMX/Web.de double-wrap, so `kendo-email.ts` renames `<del> → <s>` (and defensively `<strike>→<s>`, `<b>→<strong>`, `<i>→<em>`) **before** handing off. Block indent already arrives as inline `margin-left`, which `styleHTMLForEmail` preserves when it overwrites the `style` attribute — no work needed.
+Confirmed from Kendo's schema source (`kendo-editor-common/dist/es/config/schema.js`): marks serialize via `tagMark()` as `<strong>`, `<em>`, `<u>`, and **`<del>`** for strikethrough. `styleHTMLForEmail` only special-cases `<s>` for the GMX/Web.de double-wrap, so `kendo-email.ts` renames `<del> → <s>` **before** handing off (bold/italic/underline already serialize as `<strong>`/`<em>`/`<u>`, which the shared serializer handles directly). Block indent already arrives as inline `margin-left`, which `styleHTMLForEmail` preserves when it overwrites the `style` attribute — no work needed.
 
 The normalization lives in the editor's own folder (not pushed into the shared serializer the other two exhibits depend on), per the encapsulation rule.
 

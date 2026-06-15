@@ -3,13 +3,15 @@
 // Kendo's content model is a plain HTML string (read via EditorUtils.getHtml),
 // so the email-safe target is reached by reusing the shared, DOM-walking
 // `styleHTMLForEmail` from src/email-serializer.ts — the same path the React
-// Email exhibit uses. The only Kendo-specific work is normalising the handful
-// of tags Kendo emits that differ from the canonical set `styleHTMLForEmail`
+// Email exhibit uses. The only Kendo-specific work is normalising the one
+// tag Kendo emits that differs from the canonical set `styleHTMLForEmail`
 // keys off:
 //
 //   - Strikethrough: Kendo's default schema serialises the strike mark as
-//     `<del>` (confirmed in-browser against TEST_HTML). `styleHTMLForEmail`
-//     only special-cases `<s>` for the GMX/Web.de double-wrap, so we rename
+//     `<del>` (confirmed from Kendo's schema source — kendo-editor-common
+//     config/schema.js `tagMark('del')` — plus a headless jsdom round-trip;
+//     not yet verified in a live browser). `styleHTMLForEmail` only
+//     special-cases `<s>` for the GMX/Web.de double-wrap, so we rename
 //     `<del>` → `<s>` first.
 //   - Block indent: Kendo's Indent tool writes inline `style="margin-left:…"`
 //     on `<p>`/`<h*>` (margin-left, already email-safe — never text-indent).
@@ -22,12 +24,12 @@
 
 import { styleHTMLForEmail } from '../../email-serializer'
 
-// Tags Kendo may emit that map onto a canonical tag styleHTMLForEmail handles.
+// Kendo's only mark tag that differs from the canonical set styleHTMLForEmail
+// keys off is <del> (its strike mark; bold/italic/underline already serialize
+// as <strong>/<em>/<u>). Rename it to <s> so the shared serializer's GMX/Web.de
+// double-wrap applies.
 const TAG_ALIASES: Record<string, string> = {
   del: 's',
-  strike: 's',
-  b: 'strong',
-  i: 'em',
 }
 
 function renameTag(el: Element, newTag: string): Element {
